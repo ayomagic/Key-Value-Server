@@ -10,6 +10,8 @@ import (
 	"6.5840/labrpc"
 )
 
+const maxAttempts = 5
+
 type Clerk struct {
 	server   *labrpc.ClientEnd
 	mu       sync.Mutex
@@ -20,6 +22,23 @@ type Clerk struct {
 func (ck *Clerk) getOperationId() int64 {
 	ck.opId += 1
 	return ck.opId
+}
+
+// retryCall attempts an RPC up to five times, exponentially increasing the
+// delay between failed attempts.
+// Callers must hold ck.mu so that retries finish before this Clerk starts a
+// newer operation.
+func (ck *Clerk) retryCall(method string, args interface{}, reply interface{}) {
+	delay := 100 * time.Millisecond
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if ck.server.Call(method, args, reply) {
+			return
+		}
+		if attempt < maxAttempts-1 {
+			time.Sleep(delay)
+			delay *= 2
+		}
+	}
 }
 
 func nrand() int64 {
@@ -62,14 +81,7 @@ func (ck *Clerk) Get(key string) string {
 		Value: "",
 	}
 
-	for i := 0; i < 5; i++ {
-		ok := ck.server.Call("KVServer.Get", &args, &reply)
-		if !ok {
-			time.Sleep(500 * time.Millisecond)
-		} else {
-			break
-		}
-	}
+	ck.retryCall("KVServer.Get", &args, &reply)
 
 	if DEBUG {
 		log.Printf("Clerk Get: key= %s, result= %s", key, reply.Value)
@@ -99,14 +111,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 		Value: "",
 	}
 
-	for i := 0; i < 5; i++ {
-		ok := ck.server.Call("KVServer."+op, &args, &reply)
-		if !ok {
-			time.Sleep(500 * time.Millisecond)
-		} else {
-			break
-		}
-	}
+	ck.retryCall("KVServer."+op, &args, &reply)
 
 	if DEBUG {
 		log.Printf("Clerk call %s: key= %s, value= %s, result= %s", op, key, value, reply.Value)
