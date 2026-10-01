@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"time"
 
 	"6.5840/labrpc"
 )
@@ -12,15 +13,11 @@ import (
 type Clerk struct {
 	server   *labrpc.ClientEnd
 	mu       sync.Mutex
-	op       sync.Mutex
 	opId     int64
 	clientId int64
 }
 
 func (ck *Clerk) getOperationId() int64 {
-	ck.op.Lock()
-	defer ck.op.Unlock()
-
 	ck.opId += 1
 	return ck.opId
 }
@@ -56,7 +53,6 @@ func (ck *Clerk) Get(key string) string {
 	ck.mu.Lock()
 	defer ck.mu.Unlock()
 
-	// You will have to modify this function.
 	args := GetArgs{
 		Key:      key,
 		OpId:     ck.getOperationId(),
@@ -65,14 +61,19 @@ func (ck *Clerk) Get(key string) string {
 	reply := GetReply{
 		Value: "",
 	}
-	ok := ck.server.Call("KVServer.Get", &args, &reply)
-	if !ok {
-		// TODO: do something (handle network failure)
+
+	for i := 0; i < 5; i++ {
+		ok := ck.server.Call("KVServer.Get", &args, &reply)
+		if !ok {
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			break
+		}
 	}
+
 	if DEBUG {
 		log.Printf("Clerk Get: key= %s, result= %s", key, reply.Value)
 	}
-
 	return reply.Value
 }
 
@@ -88,7 +89,6 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	ck.mu.Lock()
 	defer ck.mu.Unlock()
 
-	// You will have to modify this function.
 	args := PutAppendArgs{
 		Key:      key,
 		Value:    value,
@@ -98,14 +98,19 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	reply := PutAppendReply{
 		Value: "",
 	}
-	ok := ck.server.Call("KVServer."+op, &args, &reply)
-	if !ok {
-		// TODO: do something (handle network failure)
+
+	for i := 0; i < 5; i++ {
+		ok := ck.server.Call("KVServer."+op, &args, &reply)
+		if !ok {
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			break
+		}
 	}
+
 	if DEBUG {
 		log.Printf("Clerk call %s: key= %s, value= %s, result= %s", op, key, value, reply.Value)
 	}
-
 	return reply.Value
 }
 
