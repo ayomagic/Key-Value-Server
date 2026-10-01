@@ -4,13 +4,25 @@ import (
 	"crypto/rand"
 	"log"
 	"math/big"
+	"sync"
 
 	"6.5840/labrpc"
 )
 
 type Clerk struct {
-	server *labrpc.ClientEnd
-	// You will have to modify this struct.
+	server   *labrpc.ClientEnd
+	mu       sync.Mutex
+	op       sync.Mutex
+	opId     int64
+	clientId int64
+}
+
+func (ck *Clerk) getOperationId() int64 {
+	ck.op.Lock()
+	defer ck.op.Unlock()
+
+	ck.opId += 1
+	return ck.opId
 }
 
 func nrand() int64 {
@@ -23,6 +35,8 @@ func nrand() int64 {
 func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.server = server
+	ck.opId = 0
+	ck.clientId = nrand()
 	// You'll have to add code here.
 	// TODO: ???
 	return ck
@@ -39,9 +53,14 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+
 	// You will have to modify this function.
 	args := GetArgs{
-		Key: key,
+		Key:      key,
+		OpId:     ck.getOperationId(),
+		ClientId: ck.clientId,
 	}
 	reply := GetReply{
 		Value: "",
@@ -66,10 +85,15 @@ func (ck *Clerk) Get(key string) string {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+
 	// You will have to modify this function.
 	args := PutAppendArgs{
-		Key:   key,
-		Value: value,
+		Key:      key,
+		Value:    value,
+		OpId:     ck.getOperationId(),
+		ClientId: ck.clientId,
 	}
 	reply := PutAppendReply{
 		Value: "",

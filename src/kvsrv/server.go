@@ -16,8 +16,26 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 }
 
 type KVServer struct {
-	mu    sync.Mutex
-	store map[string]string
+	mu          sync.Mutex
+	store       map[string]string
+	clientStore map[int64]Response
+}
+
+type Response struct {
+	Value string
+	opId  int64
+}
+
+func (kv *KVServer) lookupCacheResponse(clientId int64, operationId int64) (Response, bool) {
+	response, ok := kv.clientStore[clientId]
+	if ok && response.opId == operationId {
+		return response, true
+	}
+	return Response{}, false
+}
+
+func (kv *KVServer) cacheResponse(clientId int64, data Response) {
+	kv.clientStore[clientId] = data
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
@@ -25,8 +43,8 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 
-	key := args.Key
-
+	key, clientId := args.Key, args.ClientId
+	delete(kv.clientStore, clientId)
 	reply.Value = kv.store[key]
 	if DEBUG {
 		log.Printf("Get called: key= %s, value= %s", args.Key, reply.Value)
@@ -38,7 +56,8 @@ func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 
-	key, value := args.Key, args.Value
+	key, value, clientId := args.Key, args.Value, args.ClientId
+	delete(kv.clientStore, clientId)
 	if DEBUG {
 		log.Printf("Put called: key= %s, value= %s", key, value)
 	}
@@ -57,23 +76,30 @@ func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 
-	key, value := args.Key, args.Value
+	key, value, clienId, opId := args.Key, args.Value, args.ClientId, args.OpId
 	if DEBUG {
 		log.Printf("Append called: key= %s, value= %s", key, value)
 	}
 
-	if _, ok := kv.store[key]; !ok {
-		if DEBUG {
-			log.Printf("key= %s not found", key)
-		}
-		kv.store[key] = value
-		reply.Value = ""
+	// client response is cached
+	if resp, ok := kv.lookupCacheResponse(clienId, opId); ok {
+		reply.Value = resp.Value
 	} else {
-		if DEBUG {
-			log.Printf("key= %s found", key)
+		// client response is not cached
+		if _, ok := kv.store[key]; !ok {
+			if DEBUG {
+				log.Printf("key= %s not found", key)
+			}
+			kv.store[key] = value
+			reply.Value = ""
+		} else {
+			if DEBUG {
+				log.Printf("key= %s found", key)
+			}
+			reply.Value = kv.store[key]
+			kv.store[key] += value
 		}
-		reply.Value = kv.store[key]
-		kv.store[key] += value
+		kv.cacheResponse(clienId, Response{Value: reply.Value, opId: opId})
 	}
 
 	if DEBUG {
@@ -85,6 +111,6 @@ func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 func StartKVServer() *KVServer {
 	kv := new(KVServer)
 	kv.store = make(map[string]string)
-
+	kv.clientStore = make(map[int64]Response)
 	return kv
 }
