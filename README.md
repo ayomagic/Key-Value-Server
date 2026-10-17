@@ -24,17 +24,43 @@ Additionally, linearizability preserves real-time ordering. If one operation com
 It can be summarized as: **"Every operation appears to take effect instantaneously, and all operations respect real-time ordering."**
 
 ### Sequential Consistency:
+Sequential consistency, is a consistency model which does not respect each clients requests real time ordering. Every client operation is only required to respect the result of its previous requests. This may lead to sequential consistency returning stale values. 
 
-TODO:
+**Note**: A linearizable consistency model is always sequentially consistent, but not all sequentially consistent models are linearizable. For example, Ex.1 is sequentialy consistent but not linearizable.
+
+Ex.1
+Initial state: x = 0
+
+Client A: PUT(x, 10) → success
+                     (finishes)
+Client B:                       GET(x) → 0
+
+But Ex.2 is sequentially consistent and linearizable.
+Initial state: x = 0
+
+Client A: PUT(x, 10) → success
+                     (finishes)
+Client B:                       GET(x) → 10
+
+
 
 ### Causal Consistency:
+Causal consistency is a consistency model that preserves the ordering of operations based on their causal relationships. These dependencies are defined by the **happens-before relationship**, introduced by Leslie Lamport.
 
-TODO:
+One way to visualize causal relationships is through a **Directed Acyclic Graph (DAG)**, where each node represents an operation and a directed edge from node A to node B indicates that operation A *happens before* operation B.
+
+Causal consistency guarantees that all clients observe causally related operations in an order that respects these dependencies. However, operations that are causally independent (concurrent) do not need to be observed in the same order across all clients.
+
+The primary advantage of causal consistency is that it preserves the logical ordering of dependent operations without requiring a single global ordering of all operations. This allows distributed systems to avoid some of the coordination overhead associated with stronger consistency models, such as **sequential consistency** and **linearizability**.
+
+In essence, causal consistency guarantees that **an operation cannot be observed before its causal dependencies**, while allowing independent operations to execute and propagate without requiring global coordination.
 
 ### Eventual Consistency:
+Eventual consistency is a consistency model that guarantees that, in the absence of new writes, all replicas of a distributed system will eventually converge to the same state, assuming updates can successfully propagate between replicas.
 
-TODO:
+Unlike stronger consistency models, eventual consistency does not guarantee that clients will immediately observe the most recent write. Instead, replicas may temporarily return stale data while updates propagate throughout the system.
 
+This consistency model is commonly used in **highly available distributed systems**, where availability, scalability, and low latency are prioritized over immediate data consistency. By reducing the need for coordination between replicas, eventual consistency allows systems to continue processing requests even when replicas are temporarily out of sync.
 ## Requirements:
 
 The goal of this lab was to implement a key-value store that provides strong consistency while operating under strict memory constraints. Additionally, client requests were expected to execute correctly in the presence of failures, including network interruptions, lost responses, and server crashes.
