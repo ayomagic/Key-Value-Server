@@ -75,10 +75,6 @@ The `operationID` was represented as a 64-bit integer that would be incremented 
 
 Additionally, I selected a 64-bit integer to significantly reduce the likelihood of integer overflow, even for clients executing a large number of operations over an extended period.
 
-Example:
-
-…
-
 Although this solution worked, it required the server to maintain a record of every operation executed by each client. As the number of clients and requests increased, the amount of metadata stored on the server grew indefinitely, making this solution unsustainable under the lab's memory constraints.
 
 ## Design 2:
